@@ -1,0 +1,23 @@
+# 1. SENSITIF (WAJIB)
+.env
+
+# 2. BINER GO (HASIL BUILD)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# 3. DEPENDENCIES
+vendor/
+
+# 4. FILE SAMPAH OS & IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# 5. LOGS
+*.log
