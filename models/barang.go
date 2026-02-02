@@ -12,7 +12,7 @@ type Barang struct {
     Status        string    `json:"status"`
     Deskripsi     string    `json:"deskripsi"`
     Foto          string    `json:"foto"`
-    TglKadaluarsa *time.Time `json:"tgl_kadaluarsa"`
+    TglKadaluarsa string `json:"tgl_kadaluarsa"`
     UpdatedAt     time.Time `json:"updated_at"`
 }
 
