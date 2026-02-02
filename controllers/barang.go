@@ -2,12 +2,20 @@ package controllers
 
 import (
 	"encoding/json"
-	"net/http"
 	"gudangmng/config"
 	"gudangmng/models"
+	"net/http"
 )
 
-// InputBarangHandler: Menambah barang baru ke sistem (First Entry)
+// GetBarangHandler: Mengambil semua daftar barang
+func GetBarangHandler(w http.ResponseWriter, r *http.Request) {
+	var barangs []models.Barang
+	config.DB.Find(&barangs)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(barangs)
+}
+
+// InputBarangHandler: Menambah barang baru ke sistem
 func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
 	var input models.Barang
 	json.NewDecoder(r.Body).Decode(&input)
@@ -18,7 +26,7 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TAMBAHAN: Catat riwayat awal agar saat pertama input tidak kosong
+	// Catat riwayat awal (Stok Awal)
 	riwayat := models.Riwayat{
 		BarangID:   input.ID,
 		NamaBarang: input.NamaBarang,
@@ -28,82 +36,86 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	config.DB.Create(&riwayat)
 
-	w.Write([]byte(`{"message":"Barang berhasil didaftarkan"}`))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Barang berhasil didaftarkan"})
 }
 
-// GetBarangHandler & DeleteBarangHandler tetap sama...
-func GetBarangHandler(w http.ResponseWriter, r *http.Request) {
-	var barangs []models.Barang
-	config.DB.Find(&barangs)
-	json.NewEncoder(w).Encode(barangs)
-}
-
-// UpdateBarangHandler: Edit data barang (untuk perbaikan human error)
+// UpdateBarangHandler: Edit data master barang (termasuk Kategori, Satuan, Expired)
 func UpdateBarangHandler(w http.ResponseWriter, r *http.Request) {
 	var input models.Barang
 	json.NewDecoder(r.Body).Decode(&input)
 
-	if err := config.DB.Model(&input).Where("id = ?", input.ID).Updates(input).Error; err != nil {
+	// Update menggunakan map agar field string/time yang baru ditambahkan ter-update dengan benar
+	if err := config.DB.Model(&models.Barang{}).Where("id = ?", input.ID).Updates(map[string]interface{}{
+		"kode_barang":    input.KodeBarang,
+		"nama_barang":    input.NamaBarang,
+		"kategori":       input.Kategori,
+		"satuan":         input.Satuan,
+		"deskripsi":      input.Deskripsi,
+		"foto":           input.Foto,
+		"tgl_kadaluarsa": input.TglKadaluarsa,
+	}).Error; err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal update data"})
 		return
 	}
 
-	// MODIFIKASI: Sinkronkan riwayat lama agar datanya ikut berubah (tidak double)
-	config.DB.Model(&models.Riwayat{}).
-		Where("barang_id = ? AND keterangan LIKE ?", input.ID, "%Pendaftaran%").
-		Updates(models.Riwayat{
-			NamaBarang: input.NamaBarang,
-			Jumlah:     input.Stok,
-		})
-
-	w.Write([]byte(`{"message":"Data barang diperbarui"}`))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Data barang diperbarui"})
 }
 
-// DeleteBarangHandler tetap sama
+// DeleteBarangHandler: Menghapus data barang
 func DeleteBarangHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
+	
+	// Hapus barang berdasarkan ID
 	if err := config.DB.Delete(&models.Barang{}, id).Error; err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal hapus barang"})
 		return
 	}
-	w.Write([]byte(`{"message":"Barang berhasil dihapus"}`))
+
+	// Opsional: Hapus juga riwayat yang terkait agar database bersih
+	config.DB.Where("barang_id = ?", id).Delete(&models.Riwayat{})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Barang dan riwayat berhasil dihapus"})
 }
 
-// UpdateStokHandler: Logika Masuk/Keluar & Pencatatan Otomatis ke Riwayat
+// UpdateStokHandler: Logika Masuk/Keluar stok
 func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		ID         uint   `json:"id"`
-		Jumlah     int    `json:"jumlah"`
-		Tipe       string `json:"tipe"` // "MASUK" atau "KELUAR"
-		Keterangan string `json:"keterangan"`
+	var req struct {
+		ID     uint   `json:"id"`
+		Jumlah int    `json:"jumlah"`
+		Tipe   string `json:"tipe"` // "MASUK" atau "KELUAR"
 	}
-	json.NewDecoder(r.Body).Decode(&input)
+	json.NewDecoder(r.Body).Decode(&req)
 
 	var barang models.Barang
-	config.DB.First(&barang, input.ID)
+	config.DB.First(&barang, req.ID)
 
-	if input.Tipe == "MASUK" {
-		barang.Stok += input.Jumlah
+	if req.Tipe == "MASUK" {
+		barang.Stok += req.Jumlah
 	} else {
-		if barang.Stok < input.Jumlah {
+		if barang.Stok < req.Jumlah {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak cukup!"})
+			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak cukup"})
 			return
 		}
-		barang.Stok -= input.Jumlah
+		barang.Stok -= req.Jumlah
 	}
-	barang.Status = input.Tipe
-	config.DB.Save(&barang)
 
-	riwayat := models.Riwayat{
+	config.DB.Save(&barang)
+	
+	// Catat riwayat mutasi
+	config.DB.Create(&models.Riwayat{
 		BarangID:   barang.ID,
 		NamaBarang: barang.NamaBarang,
-		Tipe:       input.Tipe,
-		Jumlah:     input.Jumlah,
-		Keterangan: input.Keterangan,
-	}
-	config.DB.Create(&riwayat)
-	w.Write([]byte(`{"message":"Mutasi stok berhasil dicatat"}`))
+		Tipe:       req.Tipe,
+		Jumlah:     req.Jumlah,
+		Keterangan: "Update stok via Dashboard",
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Stok berhasil diupdate"})
 }

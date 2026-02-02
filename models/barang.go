@@ -7,9 +7,12 @@ type Barang struct {
     KodeBarang    string    `gorm:"unique;not null" json:"kode_barang"`
     NamaBarang    string    `gorm:"not null" json:"nama_barang"`
     Stok          int       `gorm:"default:0" json:"stok"`
+    Kategori      string    `json:"kategori"`
+    Satuan        string    `json:"satuan"`
     Status        string    `json:"status"`
+    Deskripsi     string    `json:"deskripsi"`
     Foto          string    `json:"foto"`
-    TglKadaluarsa time.Time `json:"tgl_kadaluarsa"`
+    TglKadaluarsa *time.Time `json:"tgl_kadaluarsa"`
     UpdatedAt     time.Time `json:"updated_at"`
 }
 
