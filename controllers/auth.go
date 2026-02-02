@@ -44,10 +44,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.LoginInput
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
+        return
+    }
 
 	var user models.User
-	err := config.DB.Where("username = ? AND password = ?", req.Username, req.Password).First(&user).Error
+	err := config.DB.Where("(username = ? OR email = ?) AND password = ?", req.Username, req.Username, req.Password).First(&user).Error
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
