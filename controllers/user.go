@@ -30,21 +30,36 @@ func GetUserProfile(w http.ResponseWriter, r *http.Request) {
 func UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	var input models.User
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Format data salah"})
 		return
 	}
 
-	// Pastikan ID user dikirim dari Flutter agar kita tahu siapa yang di-update
 	if input.ID == 0 {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"message": "ID User diperlukan"})
 		return
 	}
 
-	// Gunakan Map untuk update agar GORM tidak mengabaikan field kosong (opsional)
-	// Tapi dengan Updates(input) sudah cukup untuk kebutuhan Tubes kamu
-	if err := config.DB.Model(&input).Where("id = ?", input.ID).Updates(input).Error; err != nil {
+	// Menyiapkan data yang akan diupdate dalam bentuk Map
+	dataUpdate := map[string]interface{}{
+		"nama":        input.Nama,
+		"username":    input.Username,
+		"email":       input.Email,
+		"telepon":     input.Telepon,
+		"id_karyawan": input.IDKaryawan,
+	}
+
+	// Update foto hanya jika ada string baru (Base64) yang dikirim
+	if input.Foto != "" {
+		dataUpdate["foto"] = input.Foto
+	}
+
+	// PERBAIKAN: Gunakan dataUpdate (Map) agar field string panjang seperti Foto terupdate dengan aman
+	if err := config.DB.Model(&models.User{}).Where("id = ?", input.ID).Updates(dataUpdate).Error; err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal update profile"})
 		return
@@ -55,7 +70,6 @@ func UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 		"message": "Profile berhasil diperbarui",
 	})
 }
-
 // DeleteUserAccount: Tambahkan ini untuk jaga-jaga jika ada fitur hapus akun
 func DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")

@@ -10,6 +10,7 @@ type User struct {
 	Telepon    string    `json:"telepon"`     // Dari 'No. Telepon'
 	IDKaryawan string    `json:"id_karyawan"` // Dari 'ID Karyawan'
 	Password   string    `gorm:"not null" json:"password"`
+	Foto       string    `gorm:"type:longtext" json:"foto"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
