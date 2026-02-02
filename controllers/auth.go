@@ -18,17 +18,13 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req models.RegisterInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Data tidak valid", http.StatusBadRequest)
-		return
-	}
+	var newUser models.User
+	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
+        http.Error(w, "Data tidak valid", http.StatusBadRequest)
+        return
+    }
 
-	newUser := models.User{
-		Username:  req.Username,
-		Password:  req.Password,
-		CreatedAt: time.Now(),
-	}
+	newUser.CreatedAt = time.Now()
 
 	if err := config.DB.Create(&newUser).Error; err != nil {
 		w.Header().Set("Content-Type", "application/json")
