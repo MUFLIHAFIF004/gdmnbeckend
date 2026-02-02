@@ -17,51 +17,63 @@ func GetBarangHandler(w http.ResponseWriter, r *http.Request) {
 
 // InputBarangHandler: Menambah barang baru ke sistem
 func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
-	var input models.Barang
-	json.NewDecoder(r.Body).Decode(&input)
+    var input models.Barang
+    if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
+        return
+    }
 
-	if err := config.DB.Create(&input).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal input barang"})
-		return
-	}
+    // Mengambil pesan error asli dari database
+    if err := config.DB.Create(&input).Error; err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        w.Header().Set("Content-Type", "application/json")
+        // MENGIRIM PESAN ERROR ASLI (Misal: Duplicate entry atau format tanggal salah)
+        json.NewEncoder(w).Encode(map[string]string{
+            "message": "Gagal input barang: " + err.Error(),
+        })
+        return
+    }
 
-	// Catat riwayat awal (Stok Awal)
-	riwayat := models.Riwayat{
-		BarangID:   input.ID,
-		NamaBarang: input.NamaBarang,
-		Tipe:       "MASUK",
-		Jumlah:     input.Stok,
-		Keterangan: "Pendaftaran Barang Baru (Stok Awal)",
-	}
-	config.DB.Create(&riwayat)
+    // ... (sisanya tetap sama untuk Riwayat)
+    riwayat := models.Riwayat{
+        BarangID:   input.ID,
+        NamaBarang: input.NamaBarang,
+        Tipe:       "MASUK",
+        Jumlah:     input.Stok,
+        Keterangan: "Pendaftaran Barang Baru (Stok Awal)",
+    }
+    config.DB.Create(&riwayat)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Barang berhasil didaftarkan"})
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"message": "Barang berhasil didaftarkan"})
 }
 
-// UpdateBarangHandler: Edit data master barang (termasuk Kategori, Satuan, Expired)
+// UpdateBarangHandler: Edit data master barang
 func UpdateBarangHandler(w http.ResponseWriter, r *http.Request) {
-	var input models.Barang
-	json.NewDecoder(r.Body).Decode(&input)
+    var input models.Barang
+    json.NewDecoder(r.Body).Decode(&input)
 
-	// Update menggunakan map agar field string/time yang baru ditambahkan ter-update dengan benar
-	if err := config.DB.Model(&models.Barang{}).Where("id = ?", input.ID).Updates(map[string]interface{}{
-		"kode_barang":    input.KodeBarang,
-		"nama_barang":    input.NamaBarang,
-		"kategori":       input.Kategori,
-		"satuan":         input.Satuan,
-		"deskripsi":      input.Deskripsi,
-		"foto":           input.Foto,
-		"tgl_kadaluarsa": input.TglKadaluarsa,
-	}).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal update data"})
-		return
-	}
+    if err := config.DB.Model(&models.Barang{}).Where("id = ?", input.ID).Updates(map[string]interface{}{
+        "kode_barang":    input.KodeBarang,
+        "nama_barang":    input.NamaBarang,
+        "kategori":       input.Kategori,
+        "satuan":         input.Satuan,
+        "deskripsi":      input.Deskripsi,
+        "foto":           input.Foto,
+        "tgl_kadaluarsa": input.TglKadaluarsa,
+    }).Error; err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        w.Header().Set("Content-Type", "application/json")
+        // MENGIRIM PESAN ERROR ASLI
+        json.NewEncoder(w).Encode(map[string]string{
+            "message": "Gagal update data: " + err.Error(),
+        })
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Data barang diperbarui"})
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"message": "Data barang diperbarui"})
 }
 
 // DeleteBarangHandler: Menghapus data barang
