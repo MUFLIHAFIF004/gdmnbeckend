@@ -120,16 +120,6 @@ func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// LOGIKA MUTASI
-	if req.Tipe == "MASUK" {
-		barang.Stok += req.Jumlah
-	} else if req.Tipe == "KELUAR" {
-		if barang.Stok < req.Jumlah {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak mencukupi"})
-			return
-		}
-		barang.Stok -= req.Jumlah
-	}
 	barang.Status = req.Tipe
 	config.DB.Save(&barang)
 
