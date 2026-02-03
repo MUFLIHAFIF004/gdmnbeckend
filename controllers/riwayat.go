@@ -10,8 +10,8 @@ import (
 // GetRiwayatHandler: Menampilkan log semua barang masuk & keluar
 func GetRiwayatHandler(w http.ResponseWriter, r *http.Request) {
     var listRiwayat []models.Riwayat
-    // Urutkan dari yang terbaru (CreatedAt Descending)
     config.DB.Order("created_at desc").Find(&listRiwayat)
+    w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(listRiwayat)
 }
 

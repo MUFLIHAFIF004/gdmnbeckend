@@ -100,7 +100,7 @@ func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
     var req struct {
         ID     uint   `json:"id"`
         Jumlah int    `json:"jumlah"`
-        Tipe   string `json:"tipe"` // "MASUK" atau "KELUAR"
+        Tipe   string `json:"tipe"` 
     }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         w.WriteHeader(http.StatusBadRequest)
@@ -117,21 +117,16 @@ func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
 
     // LOGIKA MUTASI
     if req.Tipe == "MASUK" {
-        // Jika masuk, stok bertambah secara kumulatif
         barang.Stok += req.Jumlah
     } else if req.Tipe == "KELUAR" {
-        // --- PERBAIKAN DI SINI ---
-        // Baris pengurangan (barang.Stok -= req.Jumlah) dihapus.
-        // Ini memastikan angka stok tetap sesuai data sebelumnya dan tidak menjadi 0.
+        
     }
-
-    // MUTASI STATUS: Tetap ubah status di tabel master agar terfilter di Flutter
+   
     barang.Status = req.Tipe
     
-    // Simpan perubahan (Hanya Status yang berubah jika tipe adalah KELUAR)
+   
     config.DB.Save(&barang)
 
-    // Catat Riwayat tetap menggunakan jumlah yang diinputkan untuk laporan
     config.DB.Create(&models.Riwayat{
         BarangID:   barang.ID,
         NamaBarang: barang.NamaBarang,
