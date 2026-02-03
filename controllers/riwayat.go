@@ -7,29 +7,36 @@ import (
     "gudangmng/models"
 )
 
-// GetRiwayatHandler: Menampilkan log semua barang masuk & keluar
+// GetRiwayatHandler: Sudah Aman
 func GetRiwayatHandler(w http.ResponseWriter, r *http.Request) {
     var listRiwayat []models.Riwayat
     config.DB.Order("created_at desc").Find(&listRiwayat)
+    
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(listRiwayat)
 }
 
-// GetSummaryHandler: Untuk tampilan dashboard total barang masuk
+// GetSummaryHandler: Perbaikan pada penanganan nilai Kosong (Null)
 func GetSummaryHandler(w http.ResponseWriter, r *http.Request) {
     var total int64
-    config.DB.Model(&models.Riwayat{}).Where("tipe = ?", "MASUK").Select("sum(jumlah)").Row().Scan(&total)
+    err := config.DB.Model(&models.Riwayat{}).Where("tipe = ?", "MASUK").Select("COALESCE(sum(jumlah), 0)").Row().Scan(&total)
     
+    if err != nil {
+        total = 0 
+    }
+
+    w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(map[string]interface{}{
         "total_barang_masuk": total,
     })
 }
 
-// DeleteRiwayatHandler: Untuk menghapus catatan riwayat tertentu
+// DeleteRiwayatHandler: Perbaikan pada Header Response
 func DeleteRiwayatHandler(w http.ResponseWriter, r *http.Request) {
-    // Ambil ID dari query string, misal: /riwayat/delete?id=1
     id := r.URL.Query().Get("id")
     
+    w.Header().Set("Content-Type", "application/json") // Tambahkan ini
+
     if id == "" {
         w.WriteHeader(http.StatusBadRequest)
         json.NewEncoder(w).Encode(map[string]string{"message": "ID riwayat tidak ditemukan"})
@@ -42,5 +49,8 @@ func DeleteRiwayatHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    w.Write([]byte(`{"message":"Catatan riwayat berhasil dihapus"}`))
+    // Gunakan Encode agar format JSON konsisten dengan handler lainnya
+    json.NewEncoder(w).Encode(map[string]string{
+        "message": "Catatan riwayat berhasil dihapus",
+    })
 }

@@ -35,12 +35,17 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ketRiwayat := input.Deskripsi + " (Masuk)"
+	if input.Deskripsi == "" {
+		ketRiwayat = "Pendaftaran Barang Baru (Masuk)"
+	}
+
 	riwayat := models.Riwayat{
 		BarangID:   input.ID,
 		NamaBarang: input.NamaBarang,
 		Tipe:       "MASUK",
 		Jumlah:     input.Stok,
-		Keterangan: "Barang (Masuk)",
+		Keterangan: ketRiwayat,
 	}
 	config.DB.Create(&riwayat)
 
@@ -96,46 +101,53 @@ func DeleteBarangHandler(w http.ResponseWriter, r *http.Request) {
 
 // UpdateStokHandler: Logika Masuk/Keluar stok
 func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        ID     uint   `json:"id"`
-        Jumlah int    `json:"jumlah"`
-        Tipe   string `json:"tipe"` 
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
-        return
-    }
+	var req struct {
+		ID         uint   `json:"id"`
+		Jumlah     int    `json:"jumlah"`
+		Tipe       string `json:"tipe"`
+		Keterangan string `json:"keterangan"`
+		Tanggal    string `json:"tanggal"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
+		return
+	}
 
-    var barang models.Barang
-    if err := config.DB.First(&barang, req.ID).Error; err != nil {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(map[string]string{"message": "Barang tidak ditemukan"})
-        return
-    }
+	var barang models.Barang
+	if err := config.DB.First(&barang, req.ID).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Barang tidak ditemukan"})
+		return
+	}
 
-    // LOGIKA MUTASI
-    if req.Tipe == "MASUK" {
-        barang.Stok += req.Jumlah
-    } else if req.Tipe == "KELUAR" {
-        
-    }
-   
-    barang.Status = req.Tipe
-    
-   
-    config.DB.Save(&barang)
+	// LOGIKA MUTASI
+	if req.Tipe == "MASUK" {
+		barang.Stok += req.Jumlah
+	} else if req.Tipe == "KELUAR" {
+		if barang.Stok < req.Jumlah {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak mencukupi"})
+			return
+		}
+		barang.Stok -= req.Jumlah
+	}
+	barang.Status = req.Tipe
+	config.DB.Save(&barang)
 
-    config.DB.Create(&models.Riwayat{
-        BarangID:   barang.ID,
-        NamaBarang: barang.NamaBarang,
-        Tipe:       req.Tipe,
-        Jumlah:     req.Jumlah,
-        Keterangan: "Barang sudah dikeluarkan " + req.Tipe,
-    })
+	finalKeterangan := req.Keterangan + " (" + req.Tipe + ")"
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]string{
-        "message": "Status barang berhasil diupdate menjadi " + req.Tipe,
-    })
+	config.DB.Create(&models.Riwayat{
+		BarangID:   barang.ID,
+		NamaBarang: barang.NamaBarang,
+		Tipe:       req.Tipe,
+		Jumlah:     req.Jumlah,
+		Keterangan: finalKeterangan,
+		Tanggal:    req.Tanggal,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Status barang berhasil diupdate menjadi " + req.Tipe,
+	})
 }
