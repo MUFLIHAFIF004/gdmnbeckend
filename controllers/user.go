@@ -9,21 +9,25 @@ import (
 
 // GetUserProfile: Mengambil data profile user yang sedang login
 func GetUserProfile(w http.ResponseWriter, r *http.Request) {
-	// Mengambil ID dari parameter URL, misal: /profile?id=1
-	id := r.URL.Query().Get("id")
-	var user models.User
+    w.Header().Set("Content-Type", "application/json")
+    
+    id := r.URL.Query().Get("id")
+    
+    if id == "" {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "ID tidak boleh kosong"})
+        return
+    }
 
-	if err := config.DB.First(&user, id).Error; err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"message": "User tidak ditemukan"})
-		return
-	}
+    var user models.User
+    if err := config.DB.First(&user, id).Error; err != nil {
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"message": "User tidak ditemukan"})
+        return
+    }
+    user.Password = ""
 
-	// Keamanan: Password dikosongkan agar tidak terlihat di Flutter
-	user.Password = ""
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+    json.NewEncoder(w).Encode(user)
 }
 
 // UpdateUserProfile: Logika untuk edit profile (nama, username, dll)
