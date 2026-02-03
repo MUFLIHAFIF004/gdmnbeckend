@@ -5,7 +5,6 @@ import (
 	"gudangmng/config"
 	"gudangmng/models"
 	"net/http"
-	"strconv"
 )
 
 // GetBarangHandler: Mengambil semua daftar barang
@@ -98,48 +97,51 @@ func DeleteBarangHandler(w http.ResponseWriter, r *http.Request) {
 
 // UpdateStokHandler: Logika Masuk/Keluar stok
 func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID     uint   `json:"id"`
-		Jumlah int    `json:"jumlah"`
-		Tipe   string `json:"tipe"` // "MASUK" atau "KELUAR"
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+    var req struct {
+        ID     uint   `json:"id"`
+        Jumlah int    `json:"jumlah"`
+        Tipe   string `json:"tipe"` // "MASUK" atau "KELUAR"
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         w.WriteHeader(http.StatusBadRequest)
         json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
         return
     }
 
-	var barang models.Barang
-	if err := config.DB.First(&barang, req.ID).Error; err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Barang tidak ditemukan"})
-		return
-	}
+    var barang models.Barang
+    if err := config.DB.First(&barang, req.ID).Error; err != nil {
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Barang tidak ditemukan"})
+        return
+    }
 
-	if req.Tipe == "MASUK" {
-		barang.Stok += req.Jumlah
-	} else if req.Tipe == "KELUAR" {
-		if barang.Stok < req.Jumlah {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak cukup! Sisa stok: " + strconv.Itoa(barang.Stok)})
-			return
-		}
-		barang.Stok -= req.Jumlah
-	}
+    // LOGIKA MUTASI
+    if req.Tipe == "MASUK" {
+        // Jika masuk, stok bertambah secara kumulatif
+        barang.Stok += req.Jumlah
+    } else if req.Tipe == "KELUAR" {
+        // --- PERBAIKAN DI SINI ---
+        // Baris pengurangan (barang.Stok -= req.Jumlah) dihapus.
+        // Ini memastikan angka stok tetap sesuai data sebelumnya dan tidak menjadi 0.
+    }
 
-	// MUTASI STATUS: Ubah status di tabel master sesuai transaksi terakhir
-	barang.Status = req.Tipe
-	config.DB.Save(&barang)
+    // MUTASI STATUS: Tetap ubah status di tabel master agar terfilter di Flutter
+    barang.Status = req.Tipe
+    
+    // Simpan perubahan (Hanya Status yang berubah jika tipe adalah KELUAR)
+    config.DB.Save(&barang)
 
-	// Catat Riwayat
-	config.DB.Create(&models.Riwayat{
-		BarangID:   barang.ID,
-		NamaBarang: barang.NamaBarang,
-		Tipe:       req.Tipe,
-		Jumlah:     req.Jumlah,
-		Keterangan: "Update stok via Dashboard (" + req.Tipe + ")",
-	})
+    // Catat Riwayat tetap menggunakan jumlah yang diinputkan untuk laporan
+    config.DB.Create(&models.Riwayat{
+        BarangID:   barang.ID,
+        NamaBarang: barang.NamaBarang,
+        Tipe:       req.Tipe,
+        Jumlah:     req.Jumlah,
+        Keterangan: "Update status barang menjadi " + req.Tipe,
+    })
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Stok berhasil diupdate menjadi " + req.Tipe})
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "message": "Status barang berhasil diupdate menjadi " + req.Tipe,
+    })
 }
