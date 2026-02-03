@@ -35,13 +35,12 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ... (sisanya tetap sama untuk Riwayat)
 	riwayat := models.Riwayat{
 		BarangID:   input.ID,
 		NamaBarang: input.NamaBarang,
 		Tipe:       "MASUK",
 		Jumlah:     input.Stok,
-		Keterangan: "Pendaftaran Barang Baru (Stok Awal)",
+		Keterangan: "Barang (Masuk)",
 	}
 	config.DB.Create(&riwayat)
 
@@ -132,7 +131,7 @@ func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
         NamaBarang: barang.NamaBarang,
         Tipe:       req.Tipe,
         Jumlah:     req.Jumlah,
-        Keterangan: "Update status barang menjadi " + req.Tipe,
+        Keterangan: "Barang sudah dikeluarkan " + req.Tipe,
     })
 
     w.Header().Set("Content-Type", "application/json")
