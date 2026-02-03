@@ -5,6 +5,7 @@ import (
 	"gudangmng/config"
 	"gudangmng/models"
 	"net/http"
+	"strconv"
 )
 
 // GetBarangHandler: Mengambil semua daftar barang
@@ -100,35 +101,45 @@ func UpdateStokHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ID     uint   `json:"id"`
 		Jumlah int    `json:"jumlah"`
-		Tipe   string `json:"tipe"` 
+		Tipe   string `json:"tipe"` // "MASUK" atau "KELUAR"
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
+        return
+    }
 
 	var barang models.Barang
-	config.DB.First(&barang, req.ID)
+	if err := config.DB.First(&barang, req.ID).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Barang tidak ditemukan"})
+		return
+	}
 
 	if req.Tipe == "MASUK" {
 		barang.Stok += req.Jumlah
-	} else {
+	} else if req.Tipe == "KELUAR" {
 		if barang.Stok < req.Jumlah {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak cukup"})
+			json.NewEncoder(w).Encode(map[string]string{"message": "Stok tidak cukup! Sisa stok: " + strconv.Itoa(barang.Stok)})
 			return
 		}
 		barang.Stok -= req.Jumlah
 	}
 
+	// MUTASI STATUS: Ubah status di tabel master sesuai transaksi terakhir
+	barang.Status = req.Tipe
 	config.DB.Save(&barang)
 
-	// Catat riwayat mutasi
+	// Catat Riwayat
 	config.DB.Create(&models.Riwayat{
 		BarangID:   barang.ID,
 		NamaBarang: barang.NamaBarang,
 		Tipe:       req.Tipe,
 		Jumlah:     req.Jumlah,
-		Keterangan: "Update stok via Dashboard",
+		Keterangan: "Update stok via Dashboard (" + req.Tipe + ")",
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Stok berhasil diupdate"})
+	json.NewEncoder(w).Encode(map[string]string{"message": "Stok berhasil diupdate menjadi " + req.Tipe})
 }
