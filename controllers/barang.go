@@ -17,40 +17,38 @@ func GetBarangHandler(w http.ResponseWriter, r *http.Request) {
 
 // InputBarangHandler: Menambah barang baru ke sistem
 func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
-	var input models.Barang
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
-		return
-	}
+    var input models.Barang
+    if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
+        return
+    }
 
-	// Mengambil pesan error asli dari database
-	if err := config.DB.Create(&input).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("Content-Type", "application/json")
-		// MENGIRIM PESAN ERROR ASLI (Misal: Duplicate entry atau format tanggal salah)
-		json.NewEncoder(w).Encode(map[string]string{
-			"message": "Gagal input barang: " + err.Error(),
-		})
-		return
-	}
+    if err := config.DB.Create(&input).Error; err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]string{"message": "Gagal input barang: " + err.Error()})
+        return
+    }
 
-	ketRiwayat := input.Deskripsi + " (Masuk)"
-	if input.Deskripsi == "" {
-		ketRiwayat = "Pendaftaran Barang Baru (Masuk)"
-	}
+    // Perbaikan: Ambil keterangan dan tanggal dari input barang
+    ketRiwayat := input.Deskripsi
+    if ketRiwayat == "" {
+        ketRiwayat = "Pendaftaran Barang Baru"
+    }
 
-	riwayat := models.Riwayat{
-		BarangID:   input.ID,
-		NamaBarang: input.NamaBarang,
-		Tipe:       "MASUK",
-		Jumlah:     input.Stok,
-		Keterangan: ketRiwayat,
-	}
-	config.DB.Create(&riwayat)
+    riwayat := models.Riwayat{
+        BarangID:   input.ID,
+        NamaBarang: input.NamaBarang,
+        Tipe:       "MASUK",
+        Jumlah:     input.Stok,
+        Keterangan: ketRiwayat + " (MASUK)",
+        Tanggal:    input.TglKadaluarsa, // PENTING: Masukkan tanggal transaksi di sini
+    }
+    config.DB.Create(&riwayat)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Barang berhasil didaftarkan"})
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"message": "Barang berhasil didaftarkan"})
 }
 
 // UpdateBarangHandler: Edit data master barang
