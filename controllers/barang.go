@@ -17,40 +17,44 @@ func GetBarangHandler(w http.ResponseWriter, r *http.Request) {
 
 // InputBarangHandler: Menambah barang baru ke sistem
 func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
-    var input models.Barang
-    if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+    // 1. Buat struct sementara untuk menangkap "tanggal" transaksi dari Flutter
+    var req struct {
+        models.Barang
+        Tanggal string `json:"tanggal"` // Ini untuk menampung transDateStr (tgl 04) dari Flutter
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         w.WriteHeader(http.StatusBadRequest)
         json.NewEncoder(w).Encode(map[string]string{"message": "Format data tidak valid"})
         return
     }
 
-    if err := config.DB.Create(&input).Error; err != nil {
+    // 2. Simpan Data Master Barang (Ini akan menyimpan tgl_kadaluarsa tgl 28)
+    if err := config.DB.Create(&req.Barang).Error; err != nil {
         w.WriteHeader(http.StatusInternalServerError)
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{"message": "Gagal input barang: " + err.Error()})
+        json.NewEncoder(w).Encode(map[string]string{"message": "Gagal input barang"})
         return
     }
 
-    // Perbaikan: Ambil keterangan dan tanggal dari input barang
-    ketRiwayat := input.Deskripsi
+    // 3. Simpan Data Riwayat (Gunakan variabel 'Tanggal' yang baru, bukan TglKadaluarsa)
+    ketRiwayat := req.Deskripsi
     if ketRiwayat == "" {
         ketRiwayat = "Pendaftaran Barang Baru"
     }
 
     riwayat := models.Riwayat{
-        BarangID:   input.ID,
-        NamaBarang: input.NamaBarang,
+        BarangID:   req.Barang.ID,
+        NamaBarang: req.Barang.NamaBarang,
         Tipe:       "MASUK",
-        Jumlah:     input.Stok,
+        Jumlah:     req.Barang.Stok,
         Keterangan: ketRiwayat + " (MASUK)",
-        Tanggal:    input.TglKadaluarsa, // PENTING: Masukkan tanggal transaksi di sini
+        Tanggal:    req.Tanggal, // PERBAIKAN: Sekarang pakai Tangsal Transaksi (tgl 04)
     }
     config.DB.Create(&riwayat)
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(map[string]string{"message": "Barang berhasil didaftarkan"})
 }
-
 // UpdateBarangHandler: Edit data master barang
 func UpdateBarangHandler(w http.ResponseWriter, r *http.Request) {
 	var input models.Barang
