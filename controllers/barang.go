@@ -35,8 +35,6 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
         json.NewEncoder(w).Encode(map[string]string{"message": "Gagal input barang"})
         return
     }
-
-    // 3. Simpan Data Riwayat (Gunakan variabel 'Tanggal' yang baru, bukan TglKadaluarsa)
     ketRiwayat := req.Deskripsi
     if ketRiwayat == "" {
         ketRiwayat = "Pendaftaran Barang Baru"
@@ -48,7 +46,7 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
         Tipe:       "MASUK",
         Jumlah:     req.Barang.Stok,
         Keterangan: ketRiwayat + " (MASUK)",
-        Tanggal:    req.Tanggal, // PERBAIKAN: Sekarang pakai Tangsal Transaksi (tgl 04)
+        Tanggal:    req.Tanggal, 
     }
     config.DB.Create(&riwayat)
 
@@ -57,30 +55,44 @@ func InputBarangHandler(w http.ResponseWriter, r *http.Request) {
 }
 // UpdateBarangHandler: Edit data master barang
 func UpdateBarangHandler(w http.ResponseWriter, r *http.Request) {
-	var input models.Barang
-	json.NewDecoder(r.Body).Decode(&input)
+    // 1. Gunakan struct penampung agar bisa menangkap "tanggal" (masuk) dan "tgl_kadaluarsa"
+    var req struct {
+        models.Barang
+        Tanggal string `json:"tanggal"` // Menangkap transDateStr baru dari Flutter
+    }
 
-	if err := config.DB.Model(&models.Barang{}).Where("id = ?", input.ID).Updates(map[string]interface{}{
-		"kode_barang":    input.KodeBarang,
-		"nama_barang":    input.NamaBarang,
-		"stok":           input.Stok,
-		"kategori":       input.Kategori,
-		"satuan":         input.Satuan,
-		"deskripsi":      input.Deskripsi,
-		"foto":           input.Foto,
-		"tgl_kadaluarsa": input.TglKadaluarsa,
-	}).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("Content-Type", "application/json")
-		// MENGIRIM PESAN ERROR ASLI
-		json.NewEncoder(w).Encode(map[string]string{
-			"message": "Gagal update data: " + err.Error(),
-		})
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Data barang diperbarui"})
+    // 2. UPDATE TABEL BARANG (Master Data & Expired)
+    if err := config.DB.Model(&models.Barang{}).Where("id = ?", req.Barang.ID).Updates(map[string]interface{}{
+        "kode_barang":    req.Barang.KodeBarang,
+        "nama_barang":    req.Barang.NamaBarang,
+        "stok":           req.Barang.Stok,
+        "kategori":       req.Barang.Kategori,
+        "satuan":         req.Barang.Satuan,
+        "deskripsi":      req.Barang.Deskripsi,
+        "foto":           req.Barang.Foto,
+        "tgl_kadaluarsa": req.Barang.TglKadaluarsa, // Tgl Expired baru
+    }).Error; err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+
+    // 3. UPDATE TABEL RIWAYAT (Tanggal Masuk)
+    // Cari riwayat bertipe 'MASUK' yang paling pertama milik barang ini, lalu ubah tanggalnya
+    if req.Tanggal != "" {
+        config.DB.Model(&models.Riwayat{}).
+            Where("barang_id = ? AND tipe = ?", req.Barang.ID, "MASUK").
+            Order("created_at asc"). // Ambil yang paling pertama dibuat
+            Limit(1).
+            Update("tanggal", req.Tanggal) // Update ke Tgl Masuk baru
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"message": "Data barang dan riwayat diperbarui"})
 }
 
 // DeleteBarangHandler: Menghapus data barang
